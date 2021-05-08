@@ -1,11 +1,17 @@
+mod generate;
+
+pub use generate::*;
+
 use crate::transactions::Transaction;
 
+#[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq, Clone)]
 pub struct ClientAccount {
     client: u16,
     available: f32,
     held: f32,
     total: f32,
     locked: bool,
+    transactions: Vec<Transaction>,
 }
 
 impl ClientAccount {
@@ -17,7 +23,12 @@ impl ClientAccount {
             held: 0.0,
             total: 0.0,
             locked: false,
+            transactions: vec![],
         }
+    }
+
+    fn calc_available(&self) -> f32 {
+        self.total - self.held
     }
 
     #[cfg(test)]
@@ -28,24 +39,49 @@ impl ClientAccount {
             held: 0.0,
             total: balance,
             locked: false,
+            transactions: vec![],
         }
     }
 
-    pub fn deposit_to_account(self, transaction: Transaction) -> Self {
+    pub fn deposit_to_account(mut self, transaction: Transaction) -> Self {
+        if self.is_locked() {
+            return self;
+        }
         let new_avail = self.available + transaction.amount;
         let total = self.total + transaction.amount;
+        self.transactions.push(transaction);
+        ClientAccount {
+            available: new_avail,
+            total,
+            transactions: self.transactions,
+            ..self
+        }
+    }
+
+    pub fn withdraw_from_account(mut self, transaction: Transaction) -> Self {
+        if self.is_locked() {
+            return self;
+        }
+        if transaction.amount > self.available {
+            return self;
+        }
+        let new_avail = self.available - transaction.amount;
+        let total = self.total - transaction.amount;
+        self.transactions.push(transaction);
         ClientAccount {
             available: new_avail,
             total,
             ..self
         }
     }
-    pub fn withdraw_from_account(self, transaction: Transaction) -> Self {
-        let new_avail = self.available - transaction.amount;
-        let total = self.total - transaction.amount;
+
+    pub fn is_locked(&self) -> bool {
+        self.locked
+    }
+
+    pub fn lock_account(self) -> Self {
         ClientAccount {
-            available: new_avail,
-            total,
+            locked: true,
             ..self
         }
     }
@@ -75,5 +111,23 @@ mod tests {
         let updated = client_account.withdraw_from_account(transaction);
         assert_eq!(updated.available, 3.5);
         assert_eq!(updated.total, 3.5)
+    }
+
+    #[rstest()]
+    fn withdraw_funds_more_than_avail() {
+        let client_account = ClientAccount::new_for_testing(1, 2.0);
+        let transaction = Transaction::new_withdrawal(1, 1, 3.0);
+
+        let updated = client_account.withdraw_from_account(transaction);
+        assert_eq!(updated.available, 2.0);
+        assert_eq!(updated.total, 2.0)
+    }
+
+    #[rstest()]
+    fn lock_account() {
+        let client_account = ClientAccount::new_for_testing(1, 2.0);
+
+        let account = client_account.lock_account();
+        assert_eq!(account.locked, true);
     }
 }

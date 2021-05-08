@@ -1,11 +1,13 @@
-use payment_account::{config::Config, transactions};
+use payment_account::{accounts, config::Config, transactions, BoxError};
 use std::error::Error;
 use std::fs::File;
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), BoxError> {
     let config = Config::new().expect("Can't load args provided");
 
-    let transactions = transactions::read_transaction_file(&config);
-    println!("{:?}", transactions);
+    let transactions = transactions::read_transaction_file(&config)?;
+
+    let client_accounts = accounts::generate_client_accounts(transactions);
+    println!("{:?}", client_accounts);
     Ok(())
 }

@@ -1,4 +1,5 @@
 mod read;
+
 use serde::Deserialize;
 
 pub use read::*;
@@ -13,7 +14,7 @@ pub enum TransactionType {
     Chargeback,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(serde::Deserialize, serde::Serialize, Debug, Copy, PartialEq, Clone)]
 pub struct Transaction {
     pub payment_type: TransactionType,
     pub client: u16,
