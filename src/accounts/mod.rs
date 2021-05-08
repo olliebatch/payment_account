@@ -3,13 +3,15 @@ mod generate;
 pub use generate::*;
 
 use crate::transactions::{Transaction, TransactionType};
+use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq, Clone)]
 pub struct ClientAccount {
     client: u16,
-    available: f32,
-    held: f32,
-    total: f32,
+    available: Decimal,
+    held: Decimal,
+    total: Decimal,
     locked: bool,
     transactions: Vec<Transaction>,
 }
@@ -19,20 +21,20 @@ impl ClientAccount {
         // start a new account with 0 balance and unlocked
         ClientAccount {
             client: client_id,
-            available: 0.0,
-            held: 0.0,
-            total: 0.0,
+            available: dec!(0.0),
+            held: dec!(0.0),
+            total: dec!(0.0),
             locked: false,
             transactions: vec![],
         }
     }
 
     #[cfg(test)]
-    pub fn new_for_testing(client_id: u16, balance: f32) -> Self {
+    pub fn new_for_testing(client_id: u16, balance: Decimal) -> Self {
         ClientAccount {
             client: client_id,
             available: balance,
-            held: 0.0,
+            held: dec!(0.0),
             total: balance,
             locked: false,
             transactions: vec![],
@@ -47,6 +49,7 @@ impl ClientAccount {
         let amount = transaction.amount.unwrap();
         let new_avail = self.available + amount;
         let total = self.total + amount;
+
         self.transactions.push(transaction);
         ClientAccount {
             available: new_avail,
@@ -61,13 +64,13 @@ impl ClientAccount {
             return self;
         }
         // assume that an amount is always provided for a withdrawal
-        let transaction_amount = transaction.amount.unwrap();
+        let amount = transaction.amount.unwrap();
 
-        if transaction_amount > self.available {
+        if amount > self.available {
             return self;
         }
-        let new_avail = self.available - transaction_amount;
-        let total = self.total - transaction_amount;
+        let new_avail = self.available - amount;
+        let total = self.total - amount;
         self.transactions.push(transaction);
         ClientAccount {
             available: new_avail,
@@ -159,83 +162,84 @@ mod tests {
     use crate::accounts::ClientAccount;
     use crate::transactions::Transaction;
     use rstest::rstest;
+    use rust_decimal_macros::dec;
 
     #[rstest()]
     fn add_deposit_test() {
         let client_account = ClientAccount::new(1);
-        let transaction = Transaction::new_deposit(1, 1, Some(1.5));
+        let transaction = Transaction::new_deposit(1, 1, Some(dec!(1.5)));
 
         let updated = client_account.deposit_to_account(transaction);
-        assert_eq!(updated.available, 1.5);
-        assert_eq!(updated.total, 1.5)
+        assert_eq!(updated.available, dec!(1.5));
+        assert_eq!(updated.total, dec!(1.5))
     }
 
     #[rstest()]
     fn withdraw_funds_test() {
-        let client_account = ClientAccount::new_for_testing(1, 5.0);
-        let transaction = Transaction::new_withdrawal(1, 1, Some(1.5));
+        let client_account = ClientAccount::new_for_testing(1, dec!(5.0));
+        let transaction = Transaction::new_withdrawal(1, 1, Some(dec!(1.5)));
 
         let updated = client_account.withdraw_from_account(transaction);
-        assert_eq!(updated.available, 3.5);
-        assert_eq!(updated.total, 3.5)
+        assert_eq!(updated.available, dec!(3.5));
+        assert_eq!(updated.total, dec!(3.5))
     }
 
     #[rstest()]
     fn withdraw_funds_more_than_avail() {
-        let client_account = ClientAccount::new_for_testing(1, 2.0);
-        let transaction = Transaction::new_withdrawal(1, 1, Some(3.0));
+        let client_account = ClientAccount::new_for_testing(1, dec!(2.0));
+        let transaction = Transaction::new_withdrawal(1, 1, Some(dec!(3.0)));
 
         let updated = client_account.withdraw_from_account(transaction);
-        assert_eq!(updated.available, 2.0);
-        assert_eq!(updated.total, 2.0)
+        assert_eq!(updated.available, dec!(2.0));
+        assert_eq!(updated.total, dec!(2.0))
     }
 
     #[rstest()]
     fn dispute_funds_avail() {
-        let client_account = ClientAccount::new_for_testing(1, 2.0);
-        let transaction = Transaction::new_deposit(1, 1, Some(3.0));
+        let client_account = ClientAccount::new_for_testing(1, dec!(2.0));
+        let transaction = Transaction::new_deposit(1, 1, Some(dec!(3.0)));
         let dispute = Transaction::new_dispute(1, 1);
         let updated = client_account.deposit_to_account(transaction);
         let disputed = updated.dispute_to_account(dispute);
 
-        assert_eq!(disputed.available, 2.0);
-        assert_eq!(disputed.held, 3.0);
-        assert_eq!(disputed.total, 5.0)
+        assert_eq!(disputed.available, dec!(2.0));
+        assert_eq!(disputed.held, dec!(3.0));
+        assert_eq!(disputed.total, dec!(5.0))
     }
     #[rstest()]
     fn resolve_funds_avail() {
-        let client_account = ClientAccount::new_for_testing(1, 2.0);
-        let transaction = Transaction::new_deposit(1, 1, Some(3.0));
+        let client_account = ClientAccount::new_for_testing(1, dec!(2.0));
+        let transaction = Transaction::new_deposit(1, 1, Some(dec!(3.0)));
         let dispute = Transaction::new_dispute(1, 1);
         let resolve = Transaction::new_resolve(1, 1);
         let updated = client_account.deposit_to_account(transaction);
         let disputed = updated.dispute_to_account(dispute);
         let resolved = disputed.resolve_to_account(resolve);
 
-        assert_eq!(resolved.available, 5.0);
-        assert_eq!(resolved.held, 0.0);
-        assert_eq!(resolved.total, 5.0)
+        assert_eq!(resolved.available, dec!(5.0));
+        assert_eq!(resolved.held, dec!(0.0));
+        assert_eq!(resolved.total, dec!(5.0))
     }
 
     #[rstest()]
     fn chargeback_lock_account() {
-        let client_account = ClientAccount::new_for_testing(1, 2.0);
-        let transaction = Transaction::new_deposit(1, 1, Some(3.0));
+        let client_account = ClientAccount::new_for_testing(1, dec!(2.0));
+        let transaction = Transaction::new_deposit(1, 1, Some(dec!(3.0)));
         let dispute = Transaction::new_dispute(1, 1);
         let chargeback_trx = Transaction::new_chargeback(1, 1);
         let updated = client_account.deposit_to_account(transaction);
         let disputed = updated.dispute_to_account(dispute);
         let chargeback = disputed.chargeback_to_account(chargeback_trx);
 
-        assert_eq!(chargeback.available, 2.0);
-        assert_eq!(chargeback.held, 0.0);
-        assert_eq!(chargeback.total, 2.0);
+        assert_eq!(chargeback.available, dec!(2.0));
+        assert_eq!(chargeback.held, dec!(0.0));
+        assert_eq!(chargeback.total, dec!(2.0));
         assert_eq!(chargeback.locked, true);
     }
 
     #[rstest()]
     fn lock_account() {
-        let client_account = ClientAccount::new_for_testing(1, 2.0);
+        let client_account = ClientAccount::new_for_testing(1, dec!(2.0));
 
         let account = client_account.lock_account();
         assert_eq!(account.locked, true);

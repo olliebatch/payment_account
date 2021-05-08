@@ -3,7 +3,6 @@ use std::fs::File;
 use crate::config::Config;
 use crate::transactions::Transaction;
 use crate::BoxError;
-use std::collections::HashMap;
 
 pub fn read_transaction_file(config: &Config) -> Result<Vec<Transaction>, BoxError> {
     let file = File::open(&config.transaction_file)?;

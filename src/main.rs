@@ -1,6 +1,4 @@
 use payment_account::{accounts, config::Config, transactions, BoxError};
-use std::error::Error;
-use std::fs::File;
 
 fn main() -> Result<(), BoxError> {
     let config = Config::new().expect("Can't load args provided");

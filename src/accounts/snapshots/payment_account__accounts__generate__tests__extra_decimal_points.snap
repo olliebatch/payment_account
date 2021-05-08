@@ -1,0 +1,55 @@
+---
+source: src/accounts/generate.rs
+expression: "serde_json::json!(result)"
+
+---
+{
+  "1": {
+    "available": 1.1235,
+    "client": 1,
+    "held": 0.0,
+    "locked": false,
+    "total": 1.1235,
+    "transactions": [
+      {
+        "amount": 1.1235,
+        "client": 1,
+        "payment_type": "deposit",
+        "tx": 1
+      },
+      {
+        "amount": 2.1235,
+        "client": 1,
+        "payment_type": "deposit",
+        "tx": 3
+      },
+      {
+        "amount": 2.1235,
+        "client": 1,
+        "payment_type": "withdrawal",
+        "tx": 4
+      }
+    ]
+  },
+  "2": {
+    "available": 0.0,
+    "client": 2,
+    "held": 0.0,
+    "locked": false,
+    "total": 0.0,
+    "transactions": [
+      {
+        "amount": 2.1235,
+        "client": 2,
+        "payment_type": "deposit",
+        "tx": 2
+      },
+      {
+        "amount": 2.1235,
+        "client": 2,
+        "payment_type": "withdrawal",
+        "tx": 5
+      }
+    ]
+  }
+}
