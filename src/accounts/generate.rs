@@ -18,6 +18,9 @@ pub fn generate_client_accounts(transactions: Vec<Transaction>) -> HashMap<u16, 
         } else if transaction.payment_type == TransactionType::Withdrawal {
             let updated_account = account.clone().withdraw_from_account(transaction);
             client_accounts.insert(client, updated_account);
+        } else if transaction.payment_type == TransactionType::Dispute {
+            let updated_account = account.clone().dispute_to_account(transaction);
+            client_accounts.insert(client, updated_account);
         }
     }
     client_accounts
@@ -33,11 +36,11 @@ mod tests {
     #[rstest()]
     fn test_basic() {
         let mut transactions = vec![];
-        transactions.push(Transaction::new_deposit(1, 1, 1.0));
-        transactions.push(Transaction::new_deposit(2, 2, 2.0));
-        transactions.push(Transaction::new_deposit(1, 3, 2.0));
-        transactions.push(Transaction::new_withdrawal(1, 4, 1.5));
-        transactions.push(Transaction::new_withdrawal(2, 5, 3.0));
+        transactions.push(Transaction::new_deposit(1, 1, Some(1.0)));
+        transactions.push(Transaction::new_deposit(2, 2, Some(2.0)));
+        transactions.push(Transaction::new_deposit(1, 3, Some(2.0)));
+        transactions.push(Transaction::new_withdrawal(1, 4, Some(1.5)));
+        transactions.push(Transaction::new_withdrawal(2, 5, Some(3.0)));
 
         let result = generate_client_accounts(transactions);
 

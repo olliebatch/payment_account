@@ -2,7 +2,7 @@ mod generate;
 
 pub use generate::*;
 
-use crate::transactions::Transaction;
+use crate::transactions::{Transaction, TransactionType};
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq, Clone)]
 pub struct ClientAccount {
@@ -43,8 +43,10 @@ impl ClientAccount {
         if self.is_locked() {
             return self;
         }
-        let new_avail = self.available + transaction.amount;
-        let total = self.total + transaction.amount;
+        // assume safe to unwrap as deposit
+        let amount = transaction.amount.unwrap();
+        let new_avail = self.available + amount;
+        let total = self.total + amount;
         self.transactions.push(transaction);
         ClientAccount {
             available: new_avail,
@@ -58,16 +60,85 @@ impl ClientAccount {
         if self.is_locked() {
             return self;
         }
-        if transaction.amount > self.available {
+        // assume that an amount is always provided for a withdrawal
+        let transaction_amount = transaction.amount.unwrap();
+
+        if transaction_amount > self.available {
             return self;
         }
-        let new_avail = self.available - transaction.amount;
-        let total = self.total - transaction.amount;
+        let new_avail = self.available - transaction_amount;
+        let total = self.total - transaction_amount;
         self.transactions.push(transaction);
         ClientAccount {
             available: new_avail,
             total,
             ..self
+        }
+    }
+
+    fn find_valid_transaction(&self, trx_id: u32) -> Option<&Transaction> {
+        self.transactions.iter().find(|&transaction| {
+            transaction.tx == trx_id
+                && (transaction.payment_type == TransactionType::Withdrawal
+                    || transaction.payment_type == TransactionType::Deposit)
+        })
+    }
+
+    pub fn dispute_to_account(mut self, transaction: Transaction) -> Self {
+        let existing_trx = self.find_valid_transaction(transaction.tx);
+
+        if let Some(trx) = existing_trx {
+            let trx_amount = trx.amount.unwrap();
+            let new_avail = self.available - trx_amount;
+            let held_funds = self.held + trx_amount;
+            self.transactions.push(transaction);
+            return ClientAccount {
+                available: new_avail,
+                held: held_funds,
+                transactions: self.transactions,
+                ..self
+            };
+        } else {
+            return self;
+        }
+    }
+
+    pub fn resolve_to_account(mut self, transaction: Transaction) -> Self {
+        let existing_trx = self.find_valid_transaction(transaction.tx);
+
+        if let Some(trx) = existing_trx {
+            let trx_amount = trx.amount.unwrap();
+            let new_avail = self.available + trx_amount;
+            let held_funds = self.held - trx_amount;
+            self.transactions.push(transaction);
+            return ClientAccount {
+                available: new_avail,
+                held: held_funds,
+                transactions: self.transactions,
+                ..self
+            };
+        } else {
+            return self;
+        }
+    }
+
+    pub fn chargeback_to_account(mut self, transaction: Transaction) -> Self {
+        let existing_trx = self.find_valid_transaction(transaction.tx);
+
+        if let Some(trx) = existing_trx {
+            let trx_amount = trx.amount.unwrap();
+            let held_funds = self.held - trx_amount;
+            let total = self.total - trx_amount;
+            self.transactions.push(transaction);
+            let account = ClientAccount {
+                total,
+                held: held_funds,
+                transactions: self.transactions,
+                ..self
+            };
+            account.lock_account()
+        } else {
+            return self;
         }
     }
 
@@ -92,7 +163,7 @@ mod tests {
     #[rstest()]
     fn add_deposit_test() {
         let client_account = ClientAccount::new(1);
-        let transaction = Transaction::new_deposit(1, 1, 1.5);
+        let transaction = Transaction::new_deposit(1, 1, Some(1.5));
 
         let updated = client_account.deposit_to_account(transaction);
         assert_eq!(updated.available, 1.5);
@@ -102,7 +173,7 @@ mod tests {
     #[rstest()]
     fn withdraw_funds_test() {
         let client_account = ClientAccount::new_for_testing(1, 5.0);
-        let transaction = Transaction::new_withdrawal(1, 1, 1.5);
+        let transaction = Transaction::new_withdrawal(1, 1, Some(1.5));
 
         let updated = client_account.withdraw_from_account(transaction);
         assert_eq!(updated.available, 3.5);
@@ -112,11 +183,54 @@ mod tests {
     #[rstest()]
     fn withdraw_funds_more_than_avail() {
         let client_account = ClientAccount::new_for_testing(1, 2.0);
-        let transaction = Transaction::new_withdrawal(1, 1, 3.0);
+        let transaction = Transaction::new_withdrawal(1, 1, Some(3.0));
 
         let updated = client_account.withdraw_from_account(transaction);
         assert_eq!(updated.available, 2.0);
         assert_eq!(updated.total, 2.0)
+    }
+
+    #[rstest()]
+    fn dispute_funds_avail() {
+        let client_account = ClientAccount::new_for_testing(1, 2.0);
+        let transaction = Transaction::new_deposit(1, 1, Some(3.0));
+        let dispute = Transaction::new_dispute(1, 1);
+        let updated = client_account.deposit_to_account(transaction);
+        let disputed = updated.dispute_to_account(dispute);
+
+        assert_eq!(disputed.available, 2.0);
+        assert_eq!(disputed.held, 3.0);
+        assert_eq!(disputed.total, 5.0)
+    }
+    #[rstest()]
+    fn resolve_funds_avail() {
+        let client_account = ClientAccount::new_for_testing(1, 2.0);
+        let transaction = Transaction::new_deposit(1, 1, Some(3.0));
+        let dispute = Transaction::new_dispute(1, 1);
+        let resolve = Transaction::new_resolve(1, 1);
+        let updated = client_account.deposit_to_account(transaction);
+        let disputed = updated.dispute_to_account(dispute);
+        let resolved = disputed.resolve_to_account(resolve);
+
+        assert_eq!(resolved.available, 5.0);
+        assert_eq!(resolved.held, 0.0);
+        assert_eq!(resolved.total, 5.0)
+    }
+
+    #[rstest()]
+    fn chargeback_lock_account() {
+        let client_account = ClientAccount::new_for_testing(1, 2.0);
+        let transaction = Transaction::new_deposit(1, 1, Some(3.0));
+        let dispute = Transaction::new_dispute(1, 1);
+        let chargeback_trx = Transaction::new_chargeback(1, 1);
+        let updated = client_account.deposit_to_account(transaction);
+        let disputed = updated.dispute_to_account(dispute);
+        let chargeback = disputed.chargeback_to_account(chargeback_trx);
+
+        assert_eq!(chargeback.available, 2.0);
+        assert_eq!(chargeback.held, 0.0);
+        assert_eq!(chargeback.total, 2.0);
+        assert_eq!(chargeback.locked, true);
     }
 
     #[rstest()]
