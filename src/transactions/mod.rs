@@ -14,25 +14,9 @@ pub enum TransactionType {
 }
 
 #[derive(Deserialize, Debug)]
-struct Transaction {
+pub struct Transaction {
     payment_type: TransactionType,
     client: u16,
     tx: u32,
     amount: f32,
-}
-#[derive(Deserialize, Debug)]
-pub struct TransactionDetails {
-    payment_type: TransactionType,
-    tx: u32,
-    amount: f32,
-}
-
-impl From<Transaction> for TransactionDetails {
-    fn from(transaction: Transaction) -> Self {
-        TransactionDetails {
-            payment_type: transaction.payment_type,
-            tx: transaction.tx,
-            amount: transaction.amount,
-        }
-    }
 }
