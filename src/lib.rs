@@ -1,5 +1,6 @@
 pub mod transactions;
 
+mod accounts;
 pub mod config;
 
 use config::Config;
