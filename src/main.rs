@@ -6,6 +6,7 @@ fn main() -> Result<(), BoxError> {
     let transactions = transactions::read_transaction_file(&config)?;
 
     let client_accounts = accounts::generate_client_accounts(transactions);
-    println!("{:?}", client_accounts);
+
+    accounts::write_to_stdout(client_accounts)?;
     Ok(())
 }

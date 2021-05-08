@@ -1,10 +1,33 @@
 mod generate;
+mod write;
 
 pub use generate::*;
+pub use write::*;
 
 use crate::transactions::{Transaction, TransactionType};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
+
+#[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq, Clone)]
+pub struct ExternalClientAccount {
+    client: u16,
+    available: Decimal,
+    held: Decimal,
+    total: Decimal,
+    locked: bool,
+}
+
+impl From<&ClientAccount> for ExternalClientAccount {
+    fn from(client: &ClientAccount) -> Self {
+        ExternalClientAccount {
+            client: client.client,
+            available: client.available,
+            held: client.held,
+            total: client.total,
+            locked: client.locked,
+        }
+    }
+}
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq, Clone)]
 pub struct ClientAccount {
