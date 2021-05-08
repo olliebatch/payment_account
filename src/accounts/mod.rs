@@ -27,10 +27,6 @@ impl ClientAccount {
         }
     }
 
-    fn calc_available(&self) -> f32 {
-        self.total - self.held
-    }
-
     #[cfg(test)]
     pub fn new_for_testing(client_id: u16, balance: f32) -> Self {
         ClientAccount {
